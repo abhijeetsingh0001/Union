@@ -3,7 +3,7 @@
 import { sql } from "../config/db.js";
 
 const generateMeetingId = () => {
-  const chars = "abcdefghijlmnopqrstuvwxyz";
+  const chars = 'abcdefghijlmnopqrstuvwxyz';
   const segment = (len) => Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
   return `${segment(3)}-${segment(3)}-${segment(3)}`
 }
@@ -70,7 +70,8 @@ VALUES(${meeting.id},${userId},${hostName})`;
 
 
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.log("createMeeting failed",error);
+    res.status(500).json({ error: "failed to create meeting " });
 
   }
 
@@ -107,7 +108,8 @@ export const getMeeting = async (req, res) => {
 
     })
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.log("fetchMeeting failed",error);
+    res.status(500).json({ error: "failed to fetch meeting " });
 
   }
 
@@ -178,7 +180,8 @@ export const getUserSession = async (req, res) => {
     )
     res.json({meetings:formattedMeeting})
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.log("get user session  failed",error);
+    res.status(500).json({ error: "failed to get user session  " });
   }
 
 }
@@ -186,6 +189,7 @@ export const getUserSession = async (req, res) => {
 export const getSessionDetails = async (req, res) => {
   try {
     const {id} = req.params;
+    const userId = req.user.id;
     const meetings = await sql`
            SELECT
            m.*,
@@ -202,6 +206,18 @@ export const getSessionDetails = async (req, res) => {
       return res.status(401).json({error:"session details not found"});
     }
     const m = meetings[0];
+
+    if(m.host_id !== userId){ 
+      const membership = await sql`
+      SELECT 1 FROM meeting_participants
+      WHERE meeting_id = ${m.id} AND user_id = ${userId} LIMIT 1`;
+      if(membership.length === 0){
+        return res.status(404).json({error:"Session details not found"});
+      }
+    }
+
+
+
     const participants = await sql`
     SELECT mp.*,u.email
     FROM meeting_participants mp
@@ -249,7 +265,8 @@ export const getSessionDetails = async (req, res) => {
 
 
   } catch (error) {
-      res.status(500).json({ error: error.message });
+       console.log("get session detail failed",error);
+    res.status(500).json({ error: "failed to get session details" });
     
   }
 
@@ -280,8 +297,8 @@ export const getMeetingStats = async (req, res) => {
       maxParticipants:plan === "premium" ? 100:10,
     })
   } catch (error) {
-     res.status(500).json({ error: error.message });
-    
+     console.log("get meeting stats failed",error);
+    res.status(500).json({ error: "failed to get meeting stats" });
   }
 
 }
