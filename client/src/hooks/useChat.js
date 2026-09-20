@@ -1,14 +1,38 @@
-import { useCallback, useState } from "react"
-import { dummyInitialChatMessages } from "../assets/asset"
+import { useCallback, useEffect, useRef, useState } from "react"
 
-export const useChat = (_roomId,user)=>{
-  const [messages,setMessages] = useState(dummyInitialChatMessages)
+import { socket } from "../config/socket";
+
+export const useChat = (roomId,user)=>{
+  const [messages,setMessages] = useState([])
   const [unreadCount,setUnreadCount] = useState(0);
   const [isChatOpen,setIsChatOpen] = useState(false)
+
+  const isChatOpenRef = useRef(isChatOpen);
+  useEffect(()=>{
+    isChatOpenRef.current = isChatOpen;
+
+
+  },[isChatOpen])
+
+  useEffect(()=>{
+    if(!roomId) return;
+    const handleReceiveMessage = (message)=>{
+      setMessages((prev)=>[...prev],messages);
+      if(!isChatOpenRef.current){
+        setUnreadCount((prev)=> prev+1)
+      }
+    }
+    socket.on("receive-message",handleReceiveMessage)
+    return()=>{
+      socket.off("receive-message",handleReceiveMessage)
+    }
+
+  },[roomId])
 
   const sendMessage = useCallback(
     (text)=>{
       if(!text.trim()|| !user) return ;
+
       const message = {
         id:Date.now().toString(),
         text:text.trim(),
@@ -16,9 +40,11 @@ export const useChat = (_roomId,user)=>{
         senderId :user.id,
         time:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}),
       }
-      setMessages((prev)=>[...prev, messages]);
+      socket.emit("send-message",{roomId,message})
 
-    },[user]
+      
+
+    },[roomId,user?.id,user?.name]
   );
   const toggleChat = useCallback(()=>{
     setIsChatOpen((prev)=>{

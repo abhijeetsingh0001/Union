@@ -1,33 +1,86 @@
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { dummyMeetingDetails, dummyUser } from '../assets/asset'
 import VideoGrid from '../components/meeting/VideoGrid'
-import useWebRTC from '../hooks/useWebRTC.js'
+import {useWebRTC} from '../hooks/useWebRTC.js'
 import ChatPanel from '../components/meeting/ChatPanel.jsx'
 import { useChat } from '../hooks/useChat.js'
-import Participant from '../components/meeting/ParticipantList.jsx'
 import ParticipantList from '../components/meeting/ParticipantList.jsx'
 import ControlBar from '../components/meeting/ControlBar.jsx'
 import toast from 'react-hot-toast'
-
+import {useAuth, useUser} from '@clerk/react'
+import api from '../config/api.js'
+import Loader from '../components/Loader.jsx'
 
 const MeetingRoom = () => {
   const { meetingId } = useParams()
   const navigate = useNavigate()
-  const userdata = dummyUser;
+  const {user} = useUser()
+  const {getToken} = useAuth();
 
-  const [isParticipantOpen, setIsParticipantOpen] = useState(false)
+ 
+
+  const userdata = useMemo(()=>{
+    if(!user) return null;
+    return{
+      id:user.id,
+      name:user.fullName ||user.firstName || user.primaryEmailAddress?.emailAddress?.split("@")[0] ||"User",
+      email:user.primaryEmailAddress?.email||"",
+      image:user.imageUrl||"",
+    }
+  },[user?.id,user?.fullName,user?.firstName,user?.primaryEmailAddress?.emailAddress,
+    user?.imageUrl
+  ])
+
+  const [meeting,setMeeting] = useState(null)
+  const [loadingMeeting,setLoadingMeeting] = useState(true);
+   const [isParticipantOpen, setIsParticipantOpen] = useState(false)
+
+   //fetch meeting details to verify validity begore enabling webRTC camera access
+
+   useEffect(()=>{
+    const fetchMeeting = async()=>{
+      try {
+        const token = await getToken();
+        const res = await api.get(`/api/meetings/${meetingId}`,{
+          headers:{
+            Authorization:`Bearer${token}`,
+          },
+          
+        })
+        if(res.data.meeting.status === "ended"){
+            toast.error("This meeting has ended");
+            navigate("/dashboard");
+            return;
+          }
+          setMeeting(res.data.meeting)
+      } catch (error) {
+        const errorMsg = error.response?.data?.error ||"Meeting not found or has ended";
+        toast.error(errorMsg);
+        navigate("/dashboard");
+      }finally{
+        setLoadingMeeting(false);
+      }
+
+    }
+    fetchMeeting();
+
+   },[meetingId,navigate])
+  
 
   const handleMeetingEnded = useCallback(() => {
     navigate('/dashboard')
 
   }, [navigate])
+
   //initialize webrtc
   const {localStream,remoteUsers,audioEnabled,videoEnabled,toggleAudio,toggleVideo,endMeeting} = useWebRTC(meetingId,userdata,handleMeetingEnded)
   //intialize chat
   const {messages,sendMessage,unreadCount,isChatOpen,toggleChat}= useChat(meetingId,userdata)
 
-  const isHost = true;
+  const hostId = meeting?.host?.id || meeting?.host;
+  const isHost = Boolean(userdata?.id &&hostId&& hostId.toString() ===userdata.id.toString())
+
   const handleLeave = () => {
     toast("You Left The Meeting");
     navigate("/dashboard")
@@ -38,6 +91,9 @@ const MeetingRoom = () => {
     toast("Meeting Ended for all Participants");
     navigate("/dashboard")
 
+  }
+  if(loadingMeeting){
+    return<Loader text='Joining meeting room ...'/>
   }
 
   return (
