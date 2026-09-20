@@ -42,7 +42,7 @@ setupSocketIO(io)
 //centralized error handler 
  app.use((err,_req,res,_next)=>{
   console.log(`[Error] ${err.message}`);
-  res.status(500).json({error:err.message});
+  res.status(500).json({error:"internal server error "});
   
 
  })
